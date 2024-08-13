@@ -1,5 +1,6 @@
 import express from 'express';
-import emojis from './emojis.js';
+import routeUser from "./users.js";
+import routeAuth from "./auth.js";
 
 const router = express.Router();
 
@@ -9,7 +10,8 @@ router.get('/', (req, res) => {
   });
 });
 
-router.use('/emojis', emojis);
+router.use('/auth', routeAuth)
+router.use('/users', routeUser);
 
 export default router;
 
