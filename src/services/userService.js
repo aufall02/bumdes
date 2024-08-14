@@ -1,7 +1,6 @@
 import { database } from "../application/database.js";
 import { logger } from "../application/logging.js";
 
-// Mengambil semua data pengguna
 const getAllUsers = async () => {
     const { data, error } = await database
         .from('users')
@@ -15,7 +14,7 @@ const getAllUsers = async () => {
     return data;
 };
 
-// Membuat pengguna baru
+
 const createUser = async (user) => {
     logger.info(`Creating user ${user.username}`);
     const { data, error } = await database
@@ -35,7 +34,6 @@ const createUser = async (user) => {
     return data;
 };
 
-// Mengambil pengguna berdasarkan nama pengguna (username)
 const getUserByUsername = async (username) => {
     const { data, error } = await database
         .from('users')
@@ -51,7 +49,6 @@ const getUserByUsername = async (username) => {
     return data;
 };
 
-// Menghapus pengguna berdasarkan nama pengguna (username)
 const deleteUser = async (username) => {
     logger.info(`Deleting user ${username}`);
     const { data, error } = await database
@@ -67,7 +64,6 @@ const deleteUser = async (username) => {
     return data;
 };
 
-// Memperbarui pengguna berdasarkan nama pengguna (username)
 const updateUser = async (username, data) => {
     logger.info(`Updating user ${username}`);
     const { data: updatedData, error } = await database
@@ -83,7 +79,6 @@ const updateUser = async (username, data) => {
         logger.error(`Error updating user: ${error.message}`);
         throw error;
     }
-
     return updatedData;
 };
 

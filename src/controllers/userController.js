@@ -1,5 +1,6 @@
 import userService from '../services/userService.js';
 import bcrypt from '../helpers/bcrypt.js';
+import {logger} from "../application/logging.js";
 
 const createUser = async (req, res, next) => {
     try {
@@ -20,15 +21,16 @@ const createUser = async (req, res, next) => {
 
 const getAllUsers = async (req, res, next) => {
     try {
-        const { unit, username } = req.user; // Ambil role dan username dari token yang telah didecode
+        const user = req.user; // Ambil role dan username dari token yang telah didecode
 
         let users;
-        if (unit === 'admin') {
+        logger.info(`Getting users by username: ${{user}}`);
+        if (user.unit === 'admin') {
             // Jika user adalah admin, ambil semua data user
             users = await userService.getAllUsers();
         } else {
             // Jika user bukan admin, ambil data user berdasarkan username yang login
-            users = await userService.getUserByUsername(username);
+            users = await userService.getUserByUsername(user.username);
         }
 
         res.status(200).json(users);

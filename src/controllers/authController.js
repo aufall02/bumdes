@@ -2,7 +2,6 @@ import authService from "../services/authService.js";
 
 async function loginUser(req, res) {
     const { username, password } = req.body;
-    console.log(username, password);
 
     try {
         const token = await authService.loginUser(username, password);

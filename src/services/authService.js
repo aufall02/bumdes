@@ -9,7 +9,7 @@ const loginUser = async (username, password) => {
 
     const { data: user, error: userError } = await database
         .from('users')
-        .select('id, username, password')
+        .select('id, username, password, unit')
         .eq('username', username)
         .single();
 
@@ -27,10 +27,9 @@ const loginUser = async (username, password) => {
     const payload = {
         userId: user.id,
         username: user.username,
+        unit: user.unit
     };
     const token = await compileJWT(payload)
-
-
     return { token };
 };
 

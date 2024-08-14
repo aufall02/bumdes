@@ -1,0 +1,346 @@
+openapi: 3.0.0
+info:
+  title: File Management API
+  description: API for managing users, authentication, and files.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000/api/v1/
+
+tags:
+  - name: Auth
+    description: Endpoints related to authentication.
+  - name: Users
+    description: Endpoints for managing users.
+  - name: Files
+    description: Endpoints for managing files.
+
+paths:
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: User successfully logged in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+        '401':
+          description: Invalid credentials
+
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Logout user
+      responses:
+        '200':
+          description: User successfully logged out
+
+  /auth/check-auth:
+    get:
+      tags:
+        - Auth
+      summary: Check authentication status
+      responses:
+        '200':
+          description: User is authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+        '401':
+          description: User is not authenticated
+
+  /users/create:
+    post:
+      tags:
+        - Users
+      summary: Create a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                unit:
+                  type: string
+      responses:
+        '201':
+          description: User successfully created
+        '400':
+          description: Invalid input
+
+  /users:
+    get:
+      tags:
+        - Users
+      summary: Get all users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    username:
+                      type: string
+                    unit:
+                      type: string
+        '403':
+          description: Unauthorized access (non-admin users can only see their own data)
+
+  /users/{username}:
+    get:
+      tags:
+        - Users
+      summary: Get user by username
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - in: path
+          name: username
+          schema:
+            type: string
+          required: true
+          description: The username of the user
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  username:
+                    type: string
+                  unit:
+                    type: string
+        '404':
+          description: User not found
+
+    put:
+      tags:
+        - Users
+      summary: Update a user
+      parameters:
+        - in: path
+          name: username
+          schema:
+            type: string
+          required: true
+          description: The username of the user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                unit:
+                  type: string
+      responses:
+        '200':
+          description: User successfully updated
+        '400':
+          description: Invalid input
+
+    delete:
+      tags:
+        - Users
+      summary: Delete a user
+      parameters:
+        - in: path
+          name: username
+          schema:
+            type: string
+          required: true
+          description: The username of the user
+      responses:
+        '200':
+          description: User successfully deleted
+        '404':
+          description: User not found
+
+  /files:
+    post:
+      tags:
+        - Files
+      summary: Create a new file
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+                url:
+                  type: string
+      responses:
+        '201':
+          description: File successfully created
+        '403':
+          description: Unauthorized access
+
+    get:
+      tags:
+        - Files
+      summary: Get all files
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of files
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    filename:
+                      type: string
+                    unit:
+                      type: string
+                    url:
+                      type: string
+        '403':
+          description: Unauthorized access
+
+  /files/{id}:
+    get:
+      tags:
+        - Files
+      summary: Get file by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: The ID of the file
+      responses:
+        '200':
+          description: File details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  filename:
+                    type: string
+                  unit:
+                    type: string
+                  url:
+                    type: string
+        '404':
+          description: File not found
+        '403':
+          description: Unauthorized access
+
+    put:
+      tags:
+        - Files
+      summary: Update a file
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: The ID of the file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+                content:
+                  type: string
+      responses:
+        '200':
+          description: File successfully updated
+        '404':
+          description: File not found
+        '403':
+          description: Unauthorized access
+
+    delete:
+      tags:
+        - Files
+      summary: Delete a file
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: The ID of the file
+      responses:
+        '200':
+          description: File successfully deleted
+        '404':
+          description: File not found
+        '403':
+          description: Unauthorized access
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
