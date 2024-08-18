@@ -1,49 +1,63 @@
 import { database } from "../application/database.js";
 import { logger } from "../application/logging.js";
+import drives from "../helpers/drives.js";
+import {ResponseError} from "../errors/responseError.js";
 
-// Fungsi untuk membuat file baru
-const createFile = async (file) => {
-    logger.info(`Creating file for user ${file.user_id}`);
-    const { data, error } = await database
+const createFile = async (req) => {
+    const {tahun, bulan} = req.body
+    const result = await drives.createFileInGoogleDrive(req, req.user)
+    const response = await database
         .from('files')
         .insert({
-            userid: file.userid,
-            url: file.url,
+            userid: req.user.unit,
+            url_webview: result.url_webview,
+            url_download: result.url_download,
+            id_file: result.fileId,
             created_at: new Date(),
-            tahun: new Date().getFullYear(),
-            bulan: new Date().getMonth() + 1 // Bulan dimulai dari 0 (Januari)
+            tahun: tahun,
+            bulan: bulan
         });
 
-    if (error) {
-        logger.error(`Error creating file: ${error.message}`);
-        throw error;
+    if (response.error) {
+        logger.error(`Error creating file: ${response.error.message}`);
+        throw response.error;
     }
 
-    return data;
+    return {
+        message: 'upload file success'
+    };
 };
 
-// Fungsi untuk mendapatkan semua file
-const getAllFiles = async () => {
-    const { data, error } = await database
-        .from('files')
-        .select();
 
+const getAllFiles = async (req) => {
+    const isAdmin = req.user.unit === 'admin';
+    const query = database.from('files').select();
+    const { tahun, unit } = req.query;
+    if (tahun) {
+        query.eq('tahun', tahun);
+    }
+
+    if (!isAdmin) {
+        query.eq('userid', req.user.unit);
+    } else if (isAdmin && unit) {
+        query.eq('userid', unit);
+    }
+
+    const { data, error } = await query;
     if (error) {
         logger.error(`Error fetching files: ${error.message}`);
         throw error;
     }
-
     return data;
 };
 
-// Fungsi untuk mendapatkan file berdasarkan ID
+
 const getFileById = async (id) => {
     const { data, error } = await database
         .from('files')
         .select()
-        .eq('id', id)
+        .eq('id_file', id)
         .single();
-
     if (error) {
         logger.error(`Error fetching file by ID: ${error.message}`);
         throw error;
@@ -52,43 +66,70 @@ const getFileById = async (id) => {
     return data;
 };
 
-// Fungsi untuk mengupdate file
-const updateFile = async (id, data) => {
-    logger.info(`Updating file with ID ${id}`);
-    const { data: updatedData, error } = await database
+
+const updateFile = async (req) => {
+    logger.info(`Updating file with ID ${req.params.id}`);
+    const result  = await drives.updateFileInGoogleDrive(req);
+    const { data, error } = await database
         .from('files')
         .update({
-            ...(data.url && { url: data.url }),
+            url_webview: result.url_webview,
+            url_download: result.url_download,
+            id_file: result.fileId,
+            bulan: req.body.bulan,
+            tahun: req.body.tahun,
             updated_at: new Date(),
-            ...(data.tahun && { tahun: data.tahun }),
-            ...(data.bulan && { bulan: data.bulan })
         })
-        .eq('id', id);
+        .eq('id_file', result.id);
 
     if (error) {
         logger.error(`Error updating file: ${error.message}`);
         throw error;
     }
 
-    return updatedData;
+    return {
+        message: 'update file success'
+    };
 };
 
-// Fungsi untuk menghapus file
-const deleteFile = async (id) => {
-    logger.info(`Deleting file with ID ${id}`);
-    const result = await database
+
+const deleteFile = async (file_id) => {
+    logger.info(`Deleting file with ID ${file_id}`);
+    const { data: fileExists, error: selectError } = await database
         .from('files')
-        .delete()
-        .eq('id', id);
+        .select()
+        .eq('id_file', file_id)
+        .single();
 
-    logger.info(result)
-
-    if (result.error) {
-        logger.error(`Error deleting file: ${result.error.message}`);
-        throw result.error;
+    if (selectError) {
+        logger.error(`Error fetching file: ${selectError.message}`);
+        throw new ResponseError(404, 'file not found');
     }
 
-    return result;
+    if (!fileExists) {
+        logger.warn(`File with id ${file_id} not found.`);
+        return {
+            status: 404,
+            message: 'File not found.'
+        };
+    }
+
+    await drives.deleteFileInGoogleDrive(file_id)
+    const { error: deleteError } = await database
+        .from('files')
+        .delete()
+        .eq('id_file', file_id);
+
+    if (deleteError) {
+        logger.error(`Error deleting file: ${deleteError.message}`);
+        throw deleteError;
+    }
+
+    logger.info('File successfully deleted.');
+    return {
+        status: 200,
+        message: 'File successfully deleted.'
+    };
 };
 
 export default {

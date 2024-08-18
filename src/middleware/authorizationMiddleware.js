@@ -8,18 +8,24 @@ export const authorizeUserOrAdmin = (req, res, next) => {
         return next();
     }
 
+    if (id) {
+        fileService.getFileById(id)
+            .then(file => {
+                if (file.userid === user.unit) {
+                    // Jika ID user sesuai, izinkan akses
+                    return next();
+                } else {
+                    // Jika tidak sesuai, tolak akses
+                    return res.status(403).json({ message: 'Access denied' });
+                }
+            })
+            .catch(error => {
+                return res.status(404).json({ message: 'data not found' });
+            });
+    }else{
+        next()
+    }
 
-    fileService.getFileById(id)
-        .then(file => {
-            if (file.userid === user.id) {
-                // Jika ID user sesuai, izinkan akses
-                return next();
-            } else {
-                // Jika tidak sesuai, tolak akses
-                return res.status(403).json({ message: 'Access denied' });
-            }
-        })
-        .catch(error => {
-            return res.status(500).json({ message: 'Error fetching file' });
-        });
+
+
 };

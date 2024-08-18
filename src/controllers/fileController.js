@@ -5,11 +5,7 @@ import { logger } from "../application/logging.js";
 const createFile = async (req, res, next) => {
     try {
         logger.info('Creating file...', req.user);
-        const file = {
-            userid: req.user.userId,
-            url: req.body.url,
-        };
-        const createdFile = await fileService.createFile(file);
+        const createdFile = await fileService.createFile(req);
         res.status(201).json(createdFile);
     } catch (error) {
         logger.error(`Error in createFile controller: ${error.message}`);
@@ -20,7 +16,7 @@ const createFile = async (req, res, next) => {
 // Controller untuk mendapatkan semua file
 const getAllFiles = async (req, res, next) => {
     try {
-        const files = await fileService.getAllFiles();
+        const files = await fileService.getAllFiles(req);
         res.status(200).json(files);
     } catch (error) {
         logger.error(`Error in getAllFiles controller: ${error.message}`);
@@ -28,7 +24,7 @@ const getAllFiles = async (req, res, next) => {
     }
 };
 
-// Controller untuk mendapatkan file berdasarkan ID
+
 const getFileById = async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -47,14 +43,8 @@ const getFileById = async (req, res, next) => {
 // Controller untuk memperbarui file berdasarkan ID
 const updateFile = async (req, res, next) => {
     try {
-        const { id } = req.params;
-        const updateData = {
-            url: req.body.url,
-            tahun: req.body.tahun,
-            bulan: req.body.bulan
-        };
-        await fileService.updateFile(id, updateData);
-        res.status(200).json({message: 'Update file success'});
+        const a = await fileService.updateFile(req);
+        res.status(200).json(a);
     } catch (error) {
         logger.error(`Error in updateFile controller: ${error.message}`);
         next(error);

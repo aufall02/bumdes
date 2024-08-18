@@ -54,6 +54,20 @@ const getUserByUsername = async (req, res, next) => {
     }
 };
 
+const getCurrentUser = async (req, res, next) => {
+    try {
+        const user = req.user;
+        // const user = await userService.getUserByUsername(username);
+        if (user) {
+            res.status(200).json(user);
+        } else {
+            res.status(404).json({ message: 'User not found' });
+        }
+    } catch (e) {
+        next(e);
+    }
+};
+
 const deleteUser = async (req, res, next) => {
     try {
         const { username } = req.params;
@@ -93,5 +107,6 @@ export default {
     getAllUsers,
     getUserByUsername,
     deleteUser,
-    updateUser
+    updateUser,
+    getCurrentUser
 };

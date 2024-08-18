@@ -5,7 +5,8 @@ info:
   version: 1.0.0
 
 servers:
-  - url: http://localhost:3000/api/v1/
+  - url: https://bumdes-rho.vercel.app/api/v1
+  - url: https://localhost:5000/api/v1
 
 tags:
   - name: Auth
