@@ -13,6 +13,7 @@ const oauth2Client = new google.auth.OAuth2({
 try {
     // const creds = fs.readFileSync('tmp/creds.json');
     const {data} = await database.from('token').select('token').single();
+    console.log(data)
     oauth2Client.setCredentials(data.token);
     const tokenInfo = oauth2Client.credentials;
 

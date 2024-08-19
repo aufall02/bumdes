@@ -74,7 +74,7 @@ const createFileInGoogleDrive = async (reqFile,user)=>{
     const result = await drive.files.create({
         resource: metadata,
         media: media,
-        fields: 'id,webViewLink, webContentLink'
+        fields: 'id,name,webViewLink, webContentLink'
     })
 
     await drive.permissions.create({
@@ -87,6 +87,7 @@ const createFileInGoogleDrive = async (reqFile,user)=>{
 
     return {
         fileId: result.data.id,
+        name: result.data.name,
         url_webview: result.data.webViewLink,
         url_download: result.data.webContentLink
     }
@@ -103,6 +104,11 @@ const updateFileInGoogleDrive = async (req)=>{
     const bufferStream = new Readable();
     bufferStream.push(req.file.buffer);
     bufferStream.push(null);
+    const { name, ext } = path.parse(req.file.originalname);
+
+    const metadata = {
+        name: `${req.user.unit}_${req.body.tahun}_${req.body.bulan}${ext}`,
+    }
 
     const media = {
         mimeType:req.file.mimetype,
@@ -110,16 +116,19 @@ const updateFileInGoogleDrive = async (req)=>{
     }
 
     const result = await drive.files.update({
+
         fileId: req.params.id,
+        resource: metadata,
         media: media,
         fields: 'id, name, webViewLink, webContentLink'
     });
 
+
     return {
-        id: result.data.id,
+        fileId: result.data.id,
         name: result.data.name,
-        link: result.data.webViewLink,
-        downloadLink: result.data.webContentLink
+        url_webview: result.data.webViewLink,
+        url_download: result.data.webContentLink
     }
 
 }

@@ -14,6 +14,7 @@ const createFile = async (req) => {
             url_download: result.url_download,
             id_file: result.fileId,
             created_at: new Date(),
+            name_file: result.name,
             tahun: tahun,
             bulan: bulan
         });
@@ -70,17 +71,22 @@ const getFileById = async (id) => {
 const updateFile = async (req) => {
     logger.info(`Updating file with ID ${req.params.id}`);
     const result  = await drives.updateFileInGoogleDrive(req);
+    // console.log(result.url_webview);
+    const s = result.url_webview
+    console.log(s)
+
     const { data, error } = await database
         .from('files')
         .update({
             url_webview: result.url_webview,
             url_download: result.url_download,
             id_file: result.fileId,
+            name_file: result.name,
             bulan: req.body.bulan,
             tahun: req.body.tahun,
             updated_at: new Date(),
         })
-        .eq('id_file', result.id);
+        .eq('id_file', result.fileId);
 
     if (error) {
         logger.error(`Error updating file: ${error.message}`);
