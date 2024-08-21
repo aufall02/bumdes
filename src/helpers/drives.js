@@ -4,6 +4,9 @@ import 'dotenv/config.js'
 import * as path from "node:path";
 import {Readable} from "node:stream";
 import {logger} from "../application/logging.js";
+import xlsx from "node-xlsx";
+import {ResponseError} from "../errors/responseError.js";
+import {fileTypeFromBuffer} from 'file-type';
 
 const drive = googleSetup.google.drive({version: 'v3',auth:googleSetup.oauth2Client});
 
@@ -35,6 +38,27 @@ const createFileInGoogleDrive = async (reqFile,user)=>{
     if (!reqFile.file) {
         throw new Error('No file uploaded');
     }
+
+    const checkIfExcel = async (fileBuffer) => {
+        const fileType = await fileTypeFromBuffer(fileBuffer);
+
+        if (fileType && (fileType.mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+            fileType.mime === 'application/vnd.ms-excel')) {
+            console.log('Ini benar-benar file Excel!');
+            return true;
+        } else {
+            console.log('Ini bukan file Excel!');
+            return false;
+        }
+    };
+
+    const isExcel = await checkIfExcel(reqFile.file.buffer);
+
+    if(!isExcel){
+        throw new Error('file type tidak sesuai');
+    }
+
+
     const { name, ext } = path.parse(reqFile.file.originalname);
     const bufferStream = new Readable();
     bufferStream.push(reqFile.file.buffer);
@@ -143,9 +167,64 @@ const deleteFileInGoogleDrive = async (file_id)=>{
 }
 
 
+const mergeFileTodrive = async (berseri,klinik,pujasera,tahun,bulan)=>{
+    const dataBerseri = xlsx.parse(berseri);
+    const dataKlinik = xlsx.parse(klinik);
+    const dataPujasera = xlsx.parse(pujasera);
+
+    // const mergedSheets = [...dataBerseri, ...dataKlinik, ...dataPujasera];
+    const mergedSheets = {};
+    const addSheets = (data, prefix) => {
+        data.forEach(sheet => {
+            const sheetName = `${prefix}_${sheet.name}`;
+            mergedSheets[sheetName] = sheet.data;
+        });
+    };
+    addSheets(dataBerseri, 'berseri');
+    addSheets(dataKlinik, 'klinik');
+    addSheets(dataPujasera, 'pujasera');
+
+    // Bangun file Excel baru
+    const mergedSheetsArray = Object.keys(mergedSheets).map(name => ({
+        name: name,
+        data: mergedSheets[name]
+    }));
+
+    const mergedBuffer = xlsx.build(mergedSheetsArray);
+
+
+    const result = await drive.files.create({
+        requestBody: {
+            name: `laporan bulan ${bulan} tahun ${tahun}`,
+            parents:[ process.env.FOLDER_ADMIN]
+        },
+        media: {
+            mimeType: 'application/vnd.ms-excel',
+            body: new stream.PassThrough().end(mergedBuffer),
+        },
+        fields: 'id, webViewLink, webContentLink',
+    });
+
+    await drive.permissions.create({
+        fileId: result.data.id,
+        requestBody: {
+            role: 'reader',
+            type: 'anyone',
+        },
+    });
+
+    return {
+        fileId: result.data.id,
+        url_webview: result.data.webViewLink,
+        url_download: result.data.webContentLink
+    }
+}
+
+
 export default {
     getFileInGoogleDrive,
     createFileInGoogleDrive,
     updateFileInGoogleDrive,
-    deleteFileInGoogleDrive
+    deleteFileInGoogleDrive,
+    mergeFileTodrive
 }

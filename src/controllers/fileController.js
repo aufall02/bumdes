@@ -40,6 +40,16 @@ const getFileById = async (req, res, next) => {
     }
 };
 
+const getDataAllUnit = async (req, res, next) => {
+    try {
+        const result  = await fileService.getAllFileInUnit(req);
+        res.status(200).json(result);
+    }catch (error){
+        logger.error(`Error in getDataAllUnit controller: ${error.message}`);
+        next(error);
+    }
+}
+
 // Controller untuk memperbarui file berdasarkan ID
 const updateFile = async (req, res, next) => {
     try {
@@ -73,5 +83,6 @@ export default {
     getAllFiles,
     getFileById,
     updateFile,
-    deleteFile
+    deleteFile,
+    getDataAllUnit
 };

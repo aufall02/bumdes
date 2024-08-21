@@ -1,7 +1,12 @@
-import { database } from "../application/database.js";
-import { logger } from "../application/logging.js";
+import {database} from "../application/database.js";
+import {logger} from "../application/logging.js";
 import drives from "../helpers/drives.js";
 import {ResponseError} from "../errors/responseError.js";
+import xlsx from 'node-xlsx';
+import googleSetup from "../application/googleSetup.js";
+import * as stream from "node:stream";
+
+const drive = googleSetup.google.drive({version: 'v3',auth:googleSetup.oauth2Client});
 
 const createFile = async (req) => {
     const {tahun, bulan} = req.body
@@ -33,7 +38,7 @@ const createFile = async (req) => {
 const getAllFiles = async (req) => {
     const isAdmin = req.user.unit === 'admin';
     const query = database.from('files').select();
-    const { tahun, unit } = req.query;
+    const {tahun, unit} = req.query;
     if (tahun) {
         query.eq('tahun', tahun);
     }
@@ -44,7 +49,7 @@ const getAllFiles = async (req) => {
         query.eq('userid', unit);
     }
 
-    const { data, error } = await query;
+    const {data, error} = await query;
     if (error) {
         logger.error(`Error fetching files: ${error.message}`);
         throw error;
@@ -52,9 +57,70 @@ const getAllFiles = async (req) => {
     return data;
 };
 
+const getAllFileInUnit = async (req) => {
+    if (req.user.unit !== 'admin') {
+        throw new ResponseError(401, 'ndak bolee')
+    }
+
+    const uploadStatusPerMonth = [
+        { berseri: false, klinik: false, pujasera: false ,bulan: '1'},
+        { berseri: false, klinik: false, pujasera: false,bulan: '2' },
+        { berseri: false, klinik: false, pujasera: false,bulan: '3' },
+        { berseri: false, klinik: false, pujasera: false ,bulan: '4'},
+        { berseri: false, klinik: false, pujasera: false, bulan: '5' },
+        { berseri: false, klinik: false, pujasera: false, bulan: '6' },
+        { berseri: false, klinik: false, pujasera: false, bulan: '7' },
+        { berseri: false, klinik: false, pujasera: false , bulan: '8'},
+        { berseri: false, klinik: false, pujasera: false , bulan: '9'},
+        { berseri: false, klinik: false, pujasera: false ,bulan: '10'},
+        { berseri: false, klinik: false, pujasera: false ,bulan: '11'},
+        { berseri: false, klinik: false, pujasera: false, bulan: '12' }
+    ];
+
+    const result = await database.from('files').select('id_file,tahun,bulan,userid').eq('tahun', req.query.tahun);
+    console.log(result);
+
+    if (result.error) {
+        throw new ResponseError(404, 'eror bang')
+    }
+
+    result.data.forEach(file => {
+        const uploadMonthIndex = parseInt(file.bulan) - 1 // Mendapatkan bulan dari tanggal upload (0-11)
+        if (file.userid === 'berseri') {
+            uploadStatusPerMonth[uploadMonthIndex].berseri = true;
+            uploadStatusPerMonth[uploadMonthIndex].id_berseri = file.id_file;
+        } else if (file.userid === 'klinik') {
+            uploadStatusPerMonth[uploadMonthIndex].klinik = true;
+            uploadStatusPerMonth[uploadMonthIndex].id_klinik = file.id_file;
+        } else if (file.userid === 'pujasera') {
+            uploadStatusPerMonth[uploadMonthIndex].pujasera = true;
+            uploadStatusPerMonth[uploadMonthIndex].id_pujasera = file.id_file;
+        }
+    });
+
+    for (const status of uploadStatusPerMonth) {
+        if (status.berseri && status.klinik && status.pujasera) {
+            console.log(`Proses tertentu dijalankan untuk bulan ${status.bulan}`);
+            // Gunakan await jika perlu menjalankan operasi asinkron
+            const buffBerseri = await drives.getFileInGoogleDrive(status.id_berseri);
+            const buffklinik = await drives.getFileInGoogleDrive(status.id_klinik);
+            const buffPujasera = await drives.getFileInGoogleDrive(status.id_pujasera);
+
+            const result = await drives.mergeFileTodrive(buffBerseri,buffklinik,buffPujasera,req.query.tahun, status.bulan)
+
+            status.id_file = result.fileId;
+            status.url_webview = result.url_webview;
+            status.url_download = result.url_download;
+
+        }
+    }
+
+    return uploadStatusPerMonth
+}
+
 
 const getFileById = async (id) => {
-    const { data, error } = await database
+    const {data, error} = await database
         .from('files')
         .select()
         .eq('id_file', id)
@@ -70,12 +136,12 @@ const getFileById = async (id) => {
 
 const updateFile = async (req) => {
     logger.info(`Updating file with ID ${req.params.id}`);
-    const result  = await drives.updateFileInGoogleDrive(req);
+    const result = await drives.updateFileInGoogleDrive(req);
     // console.log(result.url_webview);
     const s = result.url_webview
     console.log(s)
 
-    const { data, error } = await database
+    const {data, error} = await database
         .from('files')
         .update({
             url_webview: result.url_webview,
@@ -101,7 +167,7 @@ const updateFile = async (req) => {
 
 const deleteFile = async (file_id) => {
     logger.info(`Deleting file with ID ${file_id}`);
-    const { data: fileExists, error: selectError } = await database
+    const {data: fileExists, error: selectError} = await database
         .from('files')
         .select()
         .eq('id_file', file_id)
@@ -121,7 +187,7 @@ const deleteFile = async (file_id) => {
     }
 
     await drives.deleteFileInGoogleDrive(file_id)
-    const { error: deleteError } = await database
+    const {error: deleteError} = await database
         .from('files')
         .delete()
         .eq('id_file', file_id);
@@ -143,5 +209,6 @@ export default {
     getAllFiles,
     getFileById,
     updateFile,
-    deleteFile
+    deleteFile,
+    getAllFileInUnit
 };
