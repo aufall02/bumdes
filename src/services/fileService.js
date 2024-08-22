@@ -2,11 +2,7 @@ import {database} from "../application/database.js";
 import {logger} from "../application/logging.js";
 import drives from "../helpers/drives.js";
 import {ResponseError} from "../errors/responseError.js";
-import xlsx from 'node-xlsx';
-import googleSetup from "../application/googleSetup.js";
-import * as stream from "node:stream";
 
-const drive = googleSetup.google.drive({version: 'v3',auth:googleSetup.oauth2Client});
 
 const createFile = async (req) => {
     const {tahun, bulan} = req.body
@@ -30,7 +26,7 @@ const createFile = async (req) => {
     }
 
     return {
-        message: 'upload file success'
+        message: "File upload successful",
     };
 };
 
@@ -59,63 +55,120 @@ const getAllFiles = async (req) => {
 
 const getAllFileInUnit = async (req) => {
     if (req.user.unit !== 'admin') {
-        throw new ResponseError(401, 'ndak bolee')
+        throw new ResponseError(401, 'unAuthorize');
     }
 
-    const uploadStatusPerMonth = [
-        { berseri: false, klinik: false, pujasera: false ,bulan: '1'},
-        { berseri: false, klinik: false, pujasera: false,bulan: '2' },
-        { berseri: false, klinik: false, pujasera: false,bulan: '3' },
-        { berseri: false, klinik: false, pujasera: false ,bulan: '4'},
-        { berseri: false, klinik: false, pujasera: false, bulan: '5' },
-        { berseri: false, klinik: false, pujasera: false, bulan: '6' },
-        { berseri: false, klinik: false, pujasera: false, bulan: '7' },
-        { berseri: false, klinik: false, pujasera: false , bulan: '8'},
-        { berseri: false, klinik: false, pujasera: false , bulan: '9'},
-        { berseri: false, klinik: false, pujasera: false ,bulan: '10'},
-        { berseri: false, klinik: false, pujasera: false ,bulan: '11'},
-        { berseri: false, klinik: false, pujasera: false, bulan: '12' }
-    ];
+    const uploadStatusPerMonth = Array.from({ length: 12 }, (_, i) => ({
+        berseri: false,
+        klinik: false,
+        pujasera: false,
+        bulan: (i + 1).toString()
+    }));
 
-    const result = await database.from('files').select('id_file,tahun,bulan,userid').eq('tahun', req.query.tahun);
-    console.log(result);
+    const result = await database
+        .from('files')
+        .select('id_file, tahun, bulan, userid')
+        .eq('tahun', req.query.tahun);
 
     if (result.error) {
-        throw new ResponseError(404, 'eror bang')
+        throw new ResponseError(404, 'eror bang');
     }
 
-    result.data.forEach(file => {
-        const uploadMonthIndex = parseInt(file.bulan) - 1 // Mendapatkan bulan dari tanggal upload (0-11)
-        if (file.userid === 'berseri') {
-            uploadStatusPerMonth[uploadMonthIndex].berseri = true;
-            uploadStatusPerMonth[uploadMonthIndex].id_berseri = file.id_file;
-        } else if (file.userid === 'klinik') {
-            uploadStatusPerMonth[uploadMonthIndex].klinik = true;
-            uploadStatusPerMonth[uploadMonthIndex].id_klinik = file.id_file;
-        } else if (file.userid === 'pujasera') {
-            uploadStatusPerMonth[uploadMonthIndex].pujasera = true;
-            uploadStatusPerMonth[uploadMonthIndex].id_pujasera = file.id_file;
+    const fileByMonthAndUnit = result.data.reduce((acc, file) => {
+        const monthIndex = parseInt(file.bulan) - 1;
+        const unitKey = file.userid;
+
+        if (!acc[monthIndex]) {
+            acc[monthIndex] = { bulan: file.bulan };
         }
+
+        acc[monthIndex][unitKey] = file.id_file;
+        return acc;
+    }, {});
+
+    const tasks = uploadStatusPerMonth.map(async (status, monthIndex) => {
+        const files = fileByMonthAndUnit[monthIndex];
+        if (files?.berseri) {
+            status.berseri = true;
+        }
+        if (files?.klinik) {
+            status.klinik = true;
+        }
+        if (files?.pujasera) {
+            status.pujasera = true;
+        }
+
+
+        if (files?.berseri && files?.klinik && files?.pujasera) {
+            // Cek apakah sudah ada file gabungan
+            const { data } = await database
+                .from('files')
+                .select()
+                .eq('userid', 'admin')
+                .eq('tahun', req.query.tahun)
+                .eq('bulan', status.bulan);
+
+            if (data.length > 0) {
+                console.log(`File untuk bulan ${status.bulan} dan tahun ${req.query.tahun} sudah digabungkan sebelumnya.`);
+
+                return {
+                    ...status,
+                    id_file: data[0].file_id,
+                    url_webview: data[0].url_webview,
+                    url_download: data[0].url_download
+                };
+            }
+
+
+
+            // Lakukan penggabungan file secara paralel
+            const [buffBerseri, buffKlinik, buffPujasera] = await Promise.all([
+                drives.getFileInGoogleDrive(files.berseri),
+                drives.getFileInGoogleDrive(files.klinik),
+                drives.getFileInGoogleDrive(files.pujasera)
+            ]);
+
+            const mergeResult = await drives.mergeFileTodrive(buffBerseri, buffKlinik, buffPujasera, req.query.tahun, status.bulan);
+
+            // Simpan metadata penggabungan
+            await database.from('files').insert({
+                tahun: req.query.tahun,
+                bulan: status.bulan,
+                id_file: mergeResult.fileId,
+                userid: 'admin',
+                name_file: mergeResult.name,
+                created_at: new Date(),
+                url_webview: mergeResult.url_webview,
+                url_download: mergeResult.url_download
+            });
+
+            return {
+                ...status,
+                id_file: mergeResult.fileId,
+                url_webview: mergeResult.url_webview,
+                url_download: mergeResult.url_download
+            };
+        }
+
+        // Jika file belum lengkap, hapus  data gabungan dari bulan tersebut jika ada
+        const { data: existingFiles } = await database
+            .from('files')
+            .select()
+            .eq('userid', 'admin')
+            .eq('tahun', req.query.tahun)
+            .eq('bulan', status.bulan);
+
+        if (existingFiles.length > 0) {
+            await database
+                .from('files')
+                .delete()
+                .eq('id_file', existingFiles[0].id_file);
+        }
+
+        return status;
     });
 
-    for (const status of uploadStatusPerMonth) {
-        if (status.berseri && status.klinik && status.pujasera) {
-            console.log(`Proses tertentu dijalankan untuk bulan ${status.bulan}`);
-            // Gunakan await jika perlu menjalankan operasi asinkron
-            const buffBerseri = await drives.getFileInGoogleDrive(status.id_berseri);
-            const buffklinik = await drives.getFileInGoogleDrive(status.id_klinik);
-            const buffPujasera = await drives.getFileInGoogleDrive(status.id_pujasera);
-
-            const result = await drives.mergeFileTodrive(buffBerseri,buffklinik,buffPujasera,req.query.tahun, status.bulan)
-
-            status.id_file = result.fileId;
-            status.url_webview = result.url_webview;
-            status.url_download = result.url_download;
-
-        }
-    }
-
-    return uploadStatusPerMonth
+    return await Promise.all(tasks);
 }
 
 

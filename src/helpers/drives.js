@@ -5,7 +5,6 @@ import * as path from "node:path";
 import {Readable} from "node:stream";
 import {logger} from "../application/logging.js";
 import xlsx from "node-xlsx";
-import {ResponseError} from "../errors/responseError.js";
 import {fileTypeFromBuffer} from 'file-type';
 
 const drive = googleSetup.google.drive({version: 'v3',auth:googleSetup.oauth2Client});
@@ -202,7 +201,7 @@ const mergeFileTodrive = async (berseri,klinik,pujasera,tahun,bulan)=>{
             mimeType: 'application/vnd.ms-excel',
             body: new stream.PassThrough().end(mergedBuffer),
         },
-        fields: 'id, webViewLink, webContentLink',
+        fields: 'id, name,webViewLink, webContentLink',
     });
 
     await drive.permissions.create({
@@ -214,6 +213,7 @@ const mergeFileTodrive = async (berseri,klinik,pujasera,tahun,bulan)=>{
     });
 
     return {
+        name: result.data.name,
         fileId: result.data.id,
         url_webview: result.data.webViewLink,
         url_download: result.data.webContentLink
