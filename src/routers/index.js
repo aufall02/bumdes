@@ -39,7 +39,7 @@ router.use('/redirect', async (req,res,next)=>{
   await database.from('token').insert({
     token: tokens
   })
-  // fs.writeFileSync("tmp/creds.json", JSON.stringify(tokens))
+  // fs.writeFileSync(  "tmp/creds.json", JSON.stringify(tokens))
   res.send('sukses')
 });
 
